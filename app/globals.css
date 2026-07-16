@@ -56,6 +56,81 @@ button {
   position: sticky;
   top: 18px;
   height: fit-content;
+  max-height: calc(100vh - 36px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebarTopActions {
+  margin-top: 6px;
+}
+
+.sidebarList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+  overflow-y: auto;
+  padding-right: 4px;
+  min-height: 0;
+}
+
+.sidebarCard {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sidebarCard.selected {
+  outline: 2px solid var(--accent2);
+}
+
+.sidebarCardMain {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sidebarCardMain h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagScroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-top: 8px;
+  padding-bottom: 4px;
+}
+
+.tagScroll .chip {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.sidebarCardActions {
+  margin-top: 8px;
+}
+
+.score.small {
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.linkish.small {
+  font-size: 0.8rem;
 }
 
 .main {
@@ -63,7 +138,10 @@ button {
   min-width: 0;
 }
 
-h1, h2, h3, p {
+h1,
+h2,
+h3,
+p {
   margin-top: 0;
 }
 
@@ -145,6 +223,29 @@ textarea {
   border: 1px solid var(--line);
 }
 
+.tagBar {
+  margin-bottom: 8px;
+}
+
+/* Fills top-to-bottom into 3 rows, then continues in a new column to the
+   right — once it runs out of vertical room it scrolls horizontally
+   instead of wrapping into a 4th row. */
+.tagGrid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, auto);
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  justify-content: start;
+}
+
+.scoreRow {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -222,6 +323,7 @@ textarea {
   .shell {
     grid-template-columns: 1fr;
   }
+
   .sidebar {
     position: relative;
     top: 0;

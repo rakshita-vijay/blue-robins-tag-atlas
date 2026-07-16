@@ -114,32 +114,25 @@ export default function Board({
           find them again instantly.
         </p>
         <p className="muted small">Signed in as {userEmail}</p>
-        <button className="button" type="button" onClick={openNew}>
-          + New project
-        </button>
-        <button className="button ghost" type="button" onClick={signOut}>
-          Sign out
-        </button>
-      </aside>
 
-      <main className="main">
-        <div className="bubbleWrap">
-          {allTags.length === 0 ? (
-            <p className="muted">No tags yet — add your first project to get started.</p>
-          ) : null}
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className={`bubble ${selectedTags.includes(tag) ? "on" : ""}`}
-              onClick={() => toggleTag(tag)}
-            >
-              {tag}
-            </button>
-          ))}
+        <div className="rowGap sidebarTopActions">
+          <button className="button" type="button" onClick={openNew}>
+            + New project
+          </button>
+          <button className="button ghost" type="button" onClick={signOut}>
+            Sign out
+          </button>
         </div>
 
-        <div className="grid">
+        <div className="sidebarList">
+          {ranked.length === 0 ? (
+            <p className="muted small">
+              {projects.length === 0
+                ? "No projects yet — add your first one."
+                : "No projects match the selected tags."}
+            </p>
+          ) : null}
+
           {ranked.map((project) => (
             <ProjectCard
               key={project.id}
@@ -152,6 +145,27 @@ export default function Board({
             />
           ))}
         </div>
+      </aside>
+
+      <main className="main">
+        <div className="tagBar">
+          {allTags.length === 0 ? (
+            <p className="muted">No tags yet — add your first project to get started.</p>
+          ) : (
+            <div className="tagGrid">
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`bubble ${selectedTags.includes(tag) ? "on" : ""}`}
+                  onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <section className="detail">
           <h2>Full content</h2>
@@ -163,6 +177,16 @@ export default function Board({
                   {new Date(activeProject.created_at).toLocaleString()}
                 </span>
               </div>
+
+              {selectedTags.length > 0 ? (
+                <div className="scoreRow">
+                  <span className="score">
+                    {activeProject.score} match{activeProject.score === 1 ? "" : "es"}
+                  </span>
+                  <span className="score">{activeProject.percentage}% similarity</span>
+                </div>
+              ) : null}
+
               <div className="tags">
                 {activeProject.tags.map((tag) => (
                   <span key={tag} className="chip">
