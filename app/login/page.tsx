@@ -1,34 +1,55 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "check-email">(
     "idle"
   );
   const [errorMsg, setErrorMsg] = useState("");
+  const router = useRouter();
 
-  async function sendLink(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setStatus("sending");
+    setStatus("loading");
     setErrorMsg("");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+
+    if (mode === "signup") {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+
+      if (error) {
+        setErrorMsg(error.message);
+        setStatus("error");
+        return;
+      }
+
+      if (!data.session) {
+        setStatus("check-email");
+        return;
+      }
+
+      router.push("/");
+      router.refresh();
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setErrorMsg(error.message);
       setStatus("error");
-    } else {
-      setStatus("sent");
+      return;
     }
+
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -40,25 +61,71 @@ export default function LoginPage() {
           find them again instantly — no more scrolling through folders.
         </p>
 
-        {status === "sent" ? (
+        {status === "check-email" ? (
           <p>
-            Check <strong>{email}</strong> for a sign-in link, then come back
-            to this tab.
+            Almost done — check <strong>{email}</strong> for a confirmation
+            link, click it, then come back and sign in.
           </p>
         ) : (
-          <form className="form" onSubmit={sendLink}>
-            <input
-              type="email"
-              required
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <button className="button" type="submit" disabled={status === "sending"}>
-              {status === "sending" ? "Sending link…" : "Send sign-in link"}
-            </button>
-            {status === "error" ? <p className="errorMsg">{errorMsg}</p> : null}
-          </form>
+          <>
+            <form className="form" onSubmit={handleSubmit}>
+              <input
+                type="email"
+                required
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <input
+                type="password"
+                required
+                minLength={6}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button className="button" type="submit" disabled={status === "loading"}>
+                {status === "loading"
+                  ? "Please wait…"
+                  : mode === "signup"
+                  ? "Create account"
+                  : "Sign in"}
+              </button>
+              {status === "error" ? <p className="errorMsg">{errorMsg}</p> : null}
+            </form>
+
+            <p className="muted small" style={{ marginTop: 14 }}>
+              {mode === "signin" ? (
+                <>
+                  No account yet?{" "}
+                  <span
+                    className="linkish"
+                    onClick={() => {
+                      setMode("signup");
+                      setStatus("idle");
+                      setErrorMsg("");
+                    }}
+                  >
+                    Create one
+                  </span>
+                </>
+              ) : (
+                <>
+                  Already have an account?{" "}
+                  <span
+                    className="linkish"
+                    onClick={() => {
+                      setMode("signin");
+                      setStatus("idle");
+                      setErrorMsg("");
+                    }}
+                  >
+                    Sign in
+                  </span>
+                </>
+              )}
+            </p>
+          </>
         )}
       </div>
     </div>
