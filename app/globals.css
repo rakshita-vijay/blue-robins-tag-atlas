@@ -227,17 +227,47 @@ textarea {
   margin-bottom: 8px;
 }
 
-/* Fills top-to-bottom into 3 rows, then continues in a new column to the
-   right — once it runs out of vertical room it scrolls horizontally
-   instead of wrapping into a 4th row. */
-.tagGrid {
-  display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(3, auto);
+/* Fills left-to-right into a top row, then a second row, then a third —
+   once three rows are full it starts a new page of up to three rows to the
+   right instead of wrapping into a 4th row, and the strip scrolls
+   horizontally from there. See components/TagGrid.tsx. */
+.tagGridWrap {
+  position: relative;
+}
+
+.tagGridMeasure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
+}
+
+.tagGrid {
+  display: flex;
+  gap: 20px;
   overflow-x: auto;
   padding-bottom: 10px;
-  justify-content: start;
+}
+
+.tagPage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.tagRow {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.tagRow .bubble {
+  white-space: nowrap;
 }
 
 .scoreRow {
@@ -319,6 +349,89 @@ textarea {
   padding: 18px;
 }
 
+.formModalCard {
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
+
+/* --- structured project sections (form) --- */
+.sectionBlock {
+  display: grid;
+  gap: 6px;
+}
+
+.sectionArea {
+  min-height: 80px;
+}
+
+.weekArea {
+  min-height: 70px;
+}
+
+.weekStepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stepperBtn {
+  margin-top: 0;
+  padding: 4px 12px;
+  line-height: 1;
+}
+
+.stepperBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.weekCount {
+  white-space: nowrap;
+}
+
+.weekList {
+  display: grid;
+  gap: 12px;
+}
+
+.weekItem {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* --- structured project sections (detail view) --- */
+.sections {
+  display: grid;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.sectionBlockView h4 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.weekViewList {
+  display: grid;
+  gap: 10px;
+}
+
+.weekViewItem {
+  display: grid;
+  gap: 6px;
+}
+
+.weekBadge {
+  width: fit-content;
+}
+
 @media (max-width: 850px) {
   .shell {
     grid-template-columns: 1fr;
@@ -380,4 +493,49 @@ textarea {
   cursor: pointer;
   margin-top: 0;
   white-space: nowrap;
+}
+
+/* --- empty detail pane --- */
+.emptyDetail {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  text-align: center;
+}
+
+/* --- archive section (footer of the sidebar) --- */
+.archiveSection {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.archiveToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.archiveToggle .chevron {
+  display: inline-flex;
+  width: 14px;
+  justify-content: center;
+}
+
+.archiveList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
 }

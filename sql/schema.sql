@@ -9,6 +9,7 @@ create table if not exists projects (
   tags text[] not null default '{}',
   file_name text,
   file_path text,
+  archived boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

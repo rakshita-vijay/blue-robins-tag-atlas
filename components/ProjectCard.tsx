@@ -10,6 +10,7 @@ export default function ProjectCard({
   selected,
   onSelect,
   onEdit,
+  onArchive,
   onDelete,
 }: {
   project: RankedProject;
@@ -17,6 +18,7 @@ export default function ProjectCard({
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
+  onArchive: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -27,7 +29,7 @@ export default function ProjectCard({
           {showScore ? <span className="score small">{project.percentage}%</span> : null}
         </div>
         <div className="tagScroll">
-          {project.tags.map((tag) => (
+          {[...project.tags].sort().map((tag) => (
             <span key={tag} className="chip">
               {tag}
             </span>
@@ -44,6 +46,15 @@ export default function ProjectCard({
           }}
         >
           edit
+        </span>
+        <span
+          className="linkish small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive();
+          }}
+        >
+          {project.archived ? "unarchive" : "archive"}
         </span>
         <span
           className="linkish danger small"
