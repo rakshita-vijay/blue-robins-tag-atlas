@@ -1,0 +1,281 @@
+:root {
+  --bg: #05010d;
+  --panel: #0d0618;
+  --panel2: #12081f;
+  --line: #2f124b;
+  --text: #f4ebff;
+  --muted: #b996db;
+  --accent: #8b5cf6;
+  --accent2: #d946ef;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 18px;
+  padding: 18px;
+}
+
+.sidebar,
+.main,
+.card,
+.detail,
+.modalCard {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  border-radius: 20px;
+}
+
+.sidebar {
+  padding: 18px;
+  position: sticky;
+  top: 18px;
+  height: fit-content;
+}
+
+.main {
+  padding: 18px;
+  min-width: 0;
+}
+
+h1, h2, h3, p {
+  margin-top: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.errorMsg {
+  color: #ff9ac8;
+  font-size: 0.9rem;
+}
+
+.form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 12px;
+  padding: 10px 14px;
+  outline: none;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.button {
+  border-radius: 12px;
+  padding: 10px 16px;
+  border: 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  color: white;
+  font-weight: 700;
+  margin-top: 12px;
+}
+
+.button.ghost {
+  background: transparent;
+  border: 1px solid var(--accent);
+  margin-top: 0;
+}
+
+.bubbleWrap,
+.tags,
+.rowGap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bubble {
+  border-radius: 999px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bubble.on {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-color: transparent;
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid var(--line);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.card {
+  text-align: left;
+  padding: 16px;
+  border-radius: 18px;
+}
+
+.card.selected {
+  outline: 2px solid var(--accent2);
+}
+
+.rowSpace {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.score {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.preview,
+.content {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  color: #f8f1ff;
+}
+
+.detail {
+  margin-top: 18px;
+  padding: 16px;
+}
+
+.actions {
+  margin-top: 10px;
+}
+
+.linkish {
+  color: #e1b7ff;
+  cursor: pointer;
+}
+
+.danger {
+  color: #ff9ac8;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 10;
+}
+
+.modalCard {
+  width: min(640px, 100%);
+  padding: 18px;
+}
+
+@media (max-width: 850px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: relative;
+    top: 0;
+  }
+}
+
+/* --- login page --- */
+.loginShell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.loginCard {
+  width: min(420px, 100%);
+  padding: 28px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  border-radius: 20px;
+}
+
+/* --- tag input (chip editor) --- */
+.tagInput {
+  display: grid;
+  gap: 10px;
+}
+
+.chip.removable {
+  cursor: pointer;
+}
+
+.bubble.small {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+}
+
+.suggestions {
+  display: grid;
+  gap: 6px;
+}
+
+/* --- file upload row --- */
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fileLabel {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  margin-top: 0;
+  white-space: nowrap;
+}
