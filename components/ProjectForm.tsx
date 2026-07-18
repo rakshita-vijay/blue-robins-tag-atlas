@@ -9,6 +9,14 @@ const ACCEPTED_EXTENSIONS = [".md", ".txt"];
 const MIN_WEEKS = 1;
 const MAX_WEEKS = 52;
 
+type SynonymNote = { newTag: string; existingTag: string; reason: string };
+
+type TagSuggestions = {
+  existingTagsToApply: string[];
+  suggestedNewTags: string[];
+  synonymNotes: SynonymNote[];
+};
+
 function emptySections(): ProjectSections {
   return {
     intro: "",
@@ -93,6 +101,11 @@ export default function ProjectForm({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<TagSuggestions | null>(null);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
   const isLegacyOnly = !project?.sections && !!project?.content && !file;
 
   function updateSection<K extends keyof Omit<ProjectSections, "weeks">>(
@@ -161,6 +174,51 @@ export default function ProjectForm({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function addTag(tag: string) {
+    const normalized = tag.trim().toLowerCase();
+    if (!normalized || tags.includes(normalized)) return;
+    setTags((prev) => [...prev, normalized]);
+  }
+
+  function dismiss(key: string) {
+    setDismissed((prev) => new Set(prev).add(key));
+  }
+
+  async function handleSuggestTags() {
+    const currentContent = file ? fileRawContent ?? "" : composeContent(sections);
+    if (!title.trim() && !currentContent.trim()) {
+      setAiError("Add a title or some content first, then suggest tags.");
+      return;
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+    setSuggestions(null);
+    setDismissed(new Set());
+
+    try {
+      const res = await fetch("/api/suggest-tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          content: currentContent,
+          existingTags: allTags,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiError(data.error ?? "AI tag suggestion failed.");
+        return;
+      }
+      setSuggestions(data);
+    } catch {
+      setAiError("Couldn't reach the AI tag suggestion service.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -224,6 +282,21 @@ export default function ProjectForm({
 
     onSaved();
   }
+
+  const visibleExisting =
+    suggestions?.existingTagsToApply.filter(
+      (t) => !tags.includes(t) && !dismissed.has(`existing:${t}`)
+    ) ?? [];
+  const visibleNew =
+    suggestions?.suggestedNewTags.filter(
+      (t) => !tags.includes(t.toLowerCase()) && !dismissed.has(`new:${t}`)
+    ) ?? [];
+  const visibleSynonyms =
+    suggestions?.synonymNotes.filter(
+      (n) => !tags.includes(n.existingTag) && !dismissed.has(`syn:${n.newTag}:${n.existingTag}`)
+    ) ?? [];
+  const hasAnySuggestions =
+    visibleExisting.length > 0 || visibleNew.length > 0 || visibleSynonyms.length > 0;
 
   return (
     <div className="modal" onClick={onClose}>
@@ -388,6 +461,83 @@ export default function ProjectForm({
 
           <label className="muted small">Tags</label>
           <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
+
+          <div className="aiTagBlock">
+            <button
+              type="button"
+              className="button ghost"
+              onClick={handleSuggestTags}
+              disabled={aiLoading}
+            >
+              {aiLoading ? "Thinking…" : "✨ Suggest tags with AI"}
+            </button>
+
+            {aiError ? <p className="errorMsg small">{aiError}</p> : null}
+
+            {hasAnySuggestions ? (
+              <div className="aiSuggestions">
+                <span className="muted small">AI suggested — click to add, × to dismiss:</span>
+                <div className="bubbleWrap">
+                  {visibleExisting.map((tag) => (
+                    <span key={`existing:${tag}`} className="bubble small aiSuggestionChip">
+                      <button type="button" onClick={() => addTag(tag)}>
+                        + {tag}
+                      </button>
+                      <span
+                        className="aiDismiss"
+                        onClick={() => dismiss(`existing:${tag}`)}
+                      >
+                        ×
+                      </span>
+                    </span>
+                  ))}
+                  {visibleNew.map((tag) => (
+                    <span key={`new:${tag}`} className="bubble small aiSuggestionChip aiNew">
+                      <button type="button" onClick={() => addTag(tag)}>
+                        + {tag} (new)
+                      </button>
+                      <span className="aiDismiss" onClick={() => dismiss(`new:${tag}`)}>
+                        ×
+                      </span>
+                    </span>
+                  ))}
+                </div>
+
+                {visibleSynonyms.length > 0 ? (
+                  <div className="aiSynonymNotes">
+                    {visibleSynonyms.map((note) => (
+                      <div
+                        key={`syn:${note.newTag}:${note.existingTag}`}
+                        className="aiSynonymNote"
+                      >
+                        <span className="muted small">
+                          &quot;{note.newTag}&quot; looks like your existing tag{" "}
+                          <strong>{note.existingTag}</strong> — {note.reason}
+                        </span>
+                        <div className="rowGap">
+                          <button
+                            type="button"
+                            className="bubble small"
+                            onClick={() => addTag(note.existingTag)}
+                          >
+                            + use {note.existingTag}
+                          </button>
+                          <span
+                            className="linkish small"
+                            onClick={() =>
+                              dismiss(`syn:${note.newTag}:${note.existingTag}`)
+                            }
+                          >
+                            dismiss
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
 
           {errorMsg ? <p className="errorMsg">{errorMsg}</p> : null}
 

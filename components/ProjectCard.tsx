@@ -4,6 +4,12 @@ import type { Project } from "@/lib/types";
 
 type RankedProject = Project & { score: number; percentage: number };
 
+function sortTags(tags: string[]): string[] {
+  return [...tags].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
+}
+
 export default function ProjectCard({
   project,
   showScore,
@@ -29,7 +35,7 @@ export default function ProjectCard({
           {showScore ? <span className="score small">{project.percentage}%</span> : null}
         </div>
         <div className="tagScroll">
-          {[...project.tags].sort().map((tag) => (
+          {sortTags(project.tags).map((tag) => (
             <span key={tag} className="chip">
               {tag}
             </span>

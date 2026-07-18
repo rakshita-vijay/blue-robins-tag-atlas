@@ -41,7 +41,7 @@ export default function Board({
   const allTags = useMemo(() => {
     const set = new Set<string>();
     activeProjects.forEach((p) => p.tags.forEach((t) => set.add(t)));
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   }, [activeProjects]);
 
   // Sidebar list: active projects, filtered/sorted by the selected tags.
@@ -270,7 +270,9 @@ export default function Board({
               ) : null}
 
               <div className="tags">
-                {[...displayedProject.tags].sort().map((tag) => (
+                {[...displayedProject.tags]
+                  .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+                  .map((tag) => (
                   <span key={tag} className="chip">
                     {tag}
                   </span>

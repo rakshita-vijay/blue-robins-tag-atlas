@@ -223,45 +223,60 @@ textarea {
   border: 1px solid var(--line);
 }
 
+/* Just a plain full-width block wrapper. All the actual scrolling,
+   pagination, and hidden-scrollbar behavior lives on .tagGrid itself
+   (see components/TagGrid.tsx) — .tagBar must NOT be a flex/nowrap/auto
+   -overflow container, or it fights with that and both the tag layout and
+   the search bar's width become unpredictable. */
 .tagBar {
   margin-bottom: 8px;
+  width: 100%;
 }
 
-/* Fills left-to-right into a top row, then a second row, then a third —
-   once three rows are full it starts a new page of up to three rows to the
-   right instead of wrapping into a 4th row, and the strip scrolls
-   horizontally from there. See components/TagGrid.tsx. */
+.tagGridOuter {
+  width: 100%;
+}
+
+/* Splits a tag list into exactly 3 rows by count (not measured pixel
+   widths) — row 1 gets the first third, row 2 the next, row 3 the rest.
+   Each row stays one line; the whole 3-row block scrolls horizontally
+   together if a row runs wider than the container. See
+   components/PagedBubbleGrid.tsx. */
 .tagGridWrap {
   position: relative;
+  width: 100%;
 }
 
-.tagGridMeasure {
-  position: absolute;
-  visibility: hidden;
-  pointer-events: none;
-  top: 0;
-  left: 0;
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
+.tagRow > span {
+  display: contents;
 }
 
 .tagGrid {
   display: flex;
+  width: 100%;
   gap: 20px;
   overflow-x: auto;
   padding-bottom: 10px;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tagGrid::-webkit-scrollbar {
+  display: none;
 }
 
 .tagPage {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
   flex: 0 0 auto;
 }
 
 .tagRow {
   display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   flex: 0 0 auto;
 }

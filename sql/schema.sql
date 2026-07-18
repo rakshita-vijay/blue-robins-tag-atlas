@@ -1,4 +1,7 @@
--- Run this whole file once, in Supabase's SQL Editor.
+-- Tag Atlas — consolidated schema.
+-- Run this whole file once, in Supabase's SQL Editor, on a fresh project.
+-- This is the final, current state of the `projects` table after all
+-- migrations — no need to run anything else afterward.
 
 -- 1) The table that holds every project.
 create table if not exists projects (
@@ -6,6 +9,7 @@ create table if not exists projects (
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null,
   content text not null,
+  sections jsonb,
   tags text[] not null default '{}',
   file_name text,
   file_path text,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import PagedBubbleGrid from "./PagedBubbleGrid";
 
 // A chip-style tag editor: shows current tags as removable chips, lets you
 // click any existing tag from earlier projects to reuse it, and lets you
@@ -58,18 +59,14 @@ export default function TagInput({
       {unusedSuggestions.length > 0 ? (
         <div className="suggestions">
           <span className="muted small">Reuse an existing tag:</span>
-          <div className="bubbleWrap">
-            {unusedSuggestions.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                className="bubble small"
-                onClick={() => addTag(tag)}
-              >
+          <PagedBubbleGrid
+            items={unusedSuggestions}
+            renderItem={(tag) => (
+              <button type="button" className="bubble small" onClick={() => addTag(tag)}>
                 + {tag}
               </button>
-            ))}
-          </div>
+            )}
+          />
         </div>
       ) : null}
     </div>
