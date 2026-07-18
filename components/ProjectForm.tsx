@@ -3,11 +3,21 @@
 import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Project, ProjectSections } from "@/lib/types";
+import {
+  MAX_WEEKS,
+  MIN_WEEKS,
+  composeContent,
+  emptySections,
+  parseSections,
+  sectionsAreEmpty,
+  splitMultipleProjects,
+  type ParsedProjectDraft,
+} from "@/lib/sections";
 import TagInput from "./TagInput";
 
+export type { ParsedProjectDraft };
+
 const ACCEPTED_EXTENSIONS = [".md", ".txt"];
-const MIN_WEEKS = 1;
-const MAX_WEEKS = 52;
 
 type SynonymNote = { newTag: string; existingTag: string; reason: string };
 
@@ -17,72 +27,37 @@ type TagSuggestions = {
   synonymNotes: SynonymNote[];
 };
 
-function emptySections(): ProjectSections {
-  return {
-    intro: "",
-    whatItIs: "",
-    deliverables: "",
-    futureScope: "",
-    stability: "",
-    weeks: [""],
-  };
-}
-
-// Turns the structured sections into one plain-text blob. This is what gets
-// saved in `content` (kept around for the DB's not-null column, downloads,
-// etc.) whenever the user fills in the fields by hand instead of uploading
-// a file.
-function composeContent(sections: ProjectSections): string {
-  const parts: string[] = [];
-
-  if (sections.intro.trim()) {
-    parts.push(`Intro / why this project:\n${sections.intro.trim()}`);
-  }
-  if (sections.whatItIs.trim()) {
-    parts.push(`What it is:\n${sections.whatItIs.trim()}`);
-  }
-  if (sections.deliverables.trim()) {
-    parts.push(`Exact end deliverables:\n${sections.deliverables.trim()}`);
-  }
-  if (sections.futureScope.trim()) {
-    parts.push(`Future scope:\n${sections.futureScope.trim()}`);
-  }
-  if (sections.stability.trim()) {
-    parts.push(`Stability:\n${sections.stability.trim()}`);
-  }
-
-  const nonEmptyWeeks = sections.weeks
-    .map((goals, i) => ({ week: i + 1, goals: goals.trim() }))
-    .filter((w) => w.goals.length > 0);
-
-  if (nonEmptyWeeks.length > 0) {
-    const weekText = nonEmptyWeeks
-      .map((w) => `Week ${w.week}: ${w.goals}`)
-      .join("\n\n");
-    parts.push(`Week-wise goals:\n${weekText}`);
-  }
-
-  return parts.join("\n\n");
-}
-
-function sectionsAreEmpty(sections: ProjectSections): boolean {
-  return composeContent(sections).trim().length === 0;
-}
-
-export default function ProjectForm({
+// The actual editable form: title, file upload, all the sections, tags,
+// AI tag suggestions, and the save button. No modal chrome of its own —
+// this is what both ProjectForm (the centered modal, below) and DraftDock
+// (the minimized-drafts stack for multi-project file uploads) render
+// inside their own wrapper, so the two stay in sync automatically instead
+// of maintaining two copies of this logic.
+export function ProjectFormBody({
   project,
+  initialTitle,
+  initialSections,
   allTags,
   userId,
-  onClose,
+  onCancel,
   onSaved,
+  onMultipleProjectsDetected,
 }: {
   project: Project | null;
+  // Seed values for a brand-new, not-yet-saved draft (e.g. one split out
+  // of a multi-project file upload). Ignored once `project` is set.
+  initialTitle?: string;
+  initialSections?: ProjectSections;
   allTags: string[];
   userId: string;
-  onClose: () => void;
+  // Called when a file upload turns out to contain multiple projects, so
+  // this form hands the split-out drafts to whoever's hosting it (the
+  // Board) and gets out of the way — see handleFileChange below.
+  onCancel: () => void;
   onSaved: () => void;
+  onMultipleProjectsDetected?: (drafts: ParsedProjectDraft[], sourceFileName: string) => void;
 }) {
-  const [title, setTitle] = useState(project?.title ?? "");
+  const [title, setTitle] = useState(project?.title ?? initialTitle ?? "");
   const [sections, setSections] = useState<ProjectSections>(() => {
     if (project?.sections) return project.sections;
     // Older projects saved before this structured form existed only have a
@@ -91,12 +66,13 @@ export default function ProjectForm({
     if (project?.content) {
       return { ...emptySections(), intro: project.content };
     }
+    if (initialSections) return initialSections;
     return emptySections();
   });
   const [tags, setTags] = useState<string[]>(project?.tags ?? []);
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(project?.file_name ?? null);
-  const [fileRawContent, setFileRawContent] = useState<string | null>(null);
+  const [fileParseNote, setFileParseNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,7 +82,7 @@ export default function ProjectForm({
   const [suggestions, setSuggestions] = useState<TagSuggestions | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
-  const isLegacyOnly = !project?.sections && !!project?.content && !file;
+  const isLegacyOnly = !project?.sections && !!project?.content;
 
   function updateSection<K extends keyof Omit<ProjectSections, "weeks">>(
     key: K,
@@ -154,12 +130,33 @@ export default function ProjectForm({
     }
 
     setErrorMsg(null);
-    setFile(selected);
-    setFileName(selected.name);
 
     const reader = new FileReader();
     reader.onload = () => {
-      setFileRawContent(String(reader.result ?? ""));
+      const text = String(reader.result ?? "");
+
+      // If the file bundles several project write-ups together, don't
+      // parse it into this one form — split it into separate drafts and
+      // let the caller (Board) surface them as minimized drafts instead,
+      // then close this now-superseded "new project" dialog.
+      const drafts = splitMultipleProjects(text);
+      if (drafts && drafts.length >= 2 && onMultipleProjectsDetected) {
+        onMultipleProjectsDetected(drafts, selected.name);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        onCancel();
+        return;
+      }
+
+      setFile(selected);
+      setFileName(selected.name);
+
+      const { sections: parsed, matchedAnything } = parseSections(text);
+      setSections(parsed);
+      setFileParseNote(
+        matchedAnything
+          ? `Pulled sections out of ${selected.name} — check they look right below before saving.`
+          : `Couldn't find section headers in ${selected.name}, so its full text was placed in "Intro" — feel free to split it into the other fields.`
+      );
       if (!title.trim()) {
         setTitle(selected.name.replace(/\.(md|txt)$/i, ""));
       }
@@ -168,9 +165,11 @@ export default function ProjectForm({
   }
 
   function clearFile() {
+    // Only drops the file from being re-uploaded to storage — the sections
+    // that were parsed out of it stay in the form so nothing is lost.
     setFile(null);
-    setFileRawContent(null);
     setFileName(project?.file_name ?? null);
+    setFileParseNote(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -185,7 +184,7 @@ export default function ProjectForm({
   }
 
   async function handleSuggestTags() {
-    const currentContent = file ? fileRawContent ?? "" : composeContent(sections);
+    const currentContent = composeContent(sections);
     if (!title.trim() && !currentContent.trim()) {
       setAiError("Add a title or some content first, then suggest tags.");
       return;
@@ -227,10 +226,7 @@ export default function ProjectForm({
       return;
     }
 
-    // Uploading a file replaces the structured write-up with the file's raw
-    // text, same as before — it's an alternative to filling in the fields.
-    const usingRawFile = !!file;
-    if (!usingRawFile && sectionsAreEmpty(sections)) {
+    if (sectionsAreEmpty(sections)) {
       setErrorMsg(
         "Please fill in at least one section below, or upload a .md/.txt file."
       );
@@ -262,8 +258,8 @@ export default function ProjectForm({
 
     const payload = {
       title: title.trim(),
-      content: usingRawFile ? fileRawContent ?? "" : composeContent(sections),
-      sections: usingRawFile ? null : sections,
+      content: composeContent(sections),
+      sections,
       tags,
       file_name: savedFileName,
       file_path: filePath,
@@ -299,21 +295,12 @@ export default function ProjectForm({
     visibleExisting.length > 0 || visibleNew.length > 0 || visibleSynonyms.length > 0;
 
   return (
-    <div className="modal" onClick={onClose}>
-      <div className="modalCard formModalCard" onClick={(e) => e.stopPropagation()}>
-        <div className="rowSpace">
-          <h3>{project ? "Edit project" : "New project"}</h3>
-          <button className="button ghost" type="button" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <form className="form" onSubmit={handleSubmit}>
-          <input
-            placeholder="Project title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
+    <form className="form" onSubmit={handleSubmit}>
+      <input
+        placeholder="Project title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
 
           <div className="fileRow">
             <label className="button ghost fileLabel">
@@ -340,124 +327,123 @@ export default function ProjectForm({
             )}
           </div>
 
-          {file ? (
+          {fileParseNote ? <p className="muted small">{fileParseNote}</p> : null}
+          {!file && isLegacyOnly ? (
             <p className="muted small">
-              A file is attached — its text will be saved as the project content
-              instead of the sections below.
+              This project predates the structured sections — its original
+              content was copied into &quot;Intro&quot; below. Feel free to
+              move it into the other fields.
             </p>
-          ) : (
-            <>
-              {isLegacyOnly ? (
-                <p className="muted small">
-                  This project predates the structured sections — its original
-                  content was copied into &quot;Intro&quot; below. Feel free to
-                  move it into the other fields.
-                </p>
-              ) : null}
+          ) : null}
 
-              <div className="sectionBlock">
-                <label className="muted small">Intro / why this project</label>
-                <textarea
-                  className="sectionArea"
-                  placeholder="Why does this project exist? What problem or motivation started it?"
-                  value={sections.intro}
-                  onChange={(e) => updateSection("intro", e.target.value)}
-                />
+          <div className="sectionBlock">
+            <label className="muted small">Intro / why this project</label>
+            <textarea
+              className="sectionArea"
+              placeholder="Why does this project exist? What problem or motivation started it?"
+              value={sections.intro}
+              onChange={(e) => updateSection("intro", e.target.value)}
+            />
+          </div>
+
+          <div className="sectionBlock">
+            <label className="muted small">What it is</label>
+            <textarea
+              className="sectionArea"
+              placeholder="A short description of what this project actually is."
+              value={sections.whatItIs}
+              onChange={(e) => updateSection("whatItIs", e.target.value)}
+            />
+          </div>
+
+          <div className="sectionBlock">
+            <label className="muted small">Exact end deliverables</label>
+            <textarea
+              className="sectionArea"
+              placeholder="Exactly what will exist when this is done."
+              value={sections.deliverables}
+              onChange={(e) => updateSection("deliverables", e.target.value)}
+            />
+          </div>
+
+          <div className="sectionBlock">
+            <label className="muted small">Future scope</label>
+            <textarea
+              className="sectionArea"
+              placeholder="What could be added or extended later."
+              value={sections.futureScope}
+              onChange={(e) => updateSection("futureScope", e.target.value)}
+            />
+          </div>
+
+          <div className="sectionBlock">
+            <label className="muted small">Stability</label>
+            <textarea
+              className="sectionArea"
+              placeholder="How stable / production-ready is this right now."
+              value={sections.stability}
+              onChange={(e) => updateSection("stability", e.target.value)}
+            />
+          </div>
+
+          <div className="sectionBlock">
+            <div className="rowSpace">
+              <label className="muted small">Week-wise goals</label>
+              <div className="weekStepper">
+                <button
+                  type="button"
+                  className="button ghost stepperBtn"
+                  onClick={() => setWeekCount(sections.weeks.length - 1)}
+                  disabled={sections.weeks.length <= MIN_WEEKS}
+                >
+                  −
+                </button>
+                <span className="muted small weekCount">
+                  {sections.weeks.length} week
+                  {sections.weeks.length === 1 ? "" : "s"}
+                </span>
+                <button
+                  type="button"
+                  className="button ghost stepperBtn"
+                  onClick={() => setWeekCount(sections.weeks.length + 1)}
+                  disabled={sections.weeks.length >= MAX_WEEKS}
+                >
+                  +
+                </button>
               </div>
+            </div>
 
-              <div className="sectionBlock">
-                <label className="muted small">What it is</label>
-                <textarea
-                  className="sectionArea"
-                  placeholder="A short description of what this project actually is."
-                  value={sections.whatItIs}
-                  onChange={(e) => updateSection("whatItIs", e.target.value)}
-                />
-              </div>
-
-              <div className="sectionBlock">
-                <label className="muted small">Exact end deliverables</label>
-                <textarea
-                  className="sectionArea"
-                  placeholder="Exactly what will exist when this is done."
-                  value={sections.deliverables}
-                  onChange={(e) => updateSection("deliverables", e.target.value)}
-                />
-              </div>
-
-              <div className="sectionBlock">
-                <label className="muted small">Future scope</label>
-                <textarea
-                  className="sectionArea"
-                  placeholder="What could be added or extended later."
-                  value={sections.futureScope}
-                  onChange={(e) => updateSection("futureScope", e.target.value)}
-                />
-              </div>
-
-              <div className="sectionBlock">
-                <label className="muted small">Stability</label>
-                <textarea
-                  className="sectionArea"
-                  placeholder="How stable / production-ready is this right now."
-                  value={sections.stability}
-                  onChange={(e) => updateSection("stability", e.target.value)}
-                />
-              </div>
-
-              <div className="sectionBlock">
-                <div className="rowSpace">
-                  <label className="muted small">Week-wise goals</label>
-                  <div className="weekStepper">
-                    <button
-                      type="button"
-                      className="button ghost stepperBtn"
-                      onClick={() => setWeekCount(sections.weeks.length - 1)}
-                      disabled={sections.weeks.length <= MIN_WEEKS}
-                    >
-                      −
-                    </button>
-                    <span className="muted small weekCount">
-                      {sections.weeks.length} week
-                      {sections.weeks.length === 1 ? "" : "s"}
-                    </span>
-                    <button
-                      type="button"
-                      className="button ghost stepperBtn"
-                      onClick={() => setWeekCount(sections.weeks.length + 1)}
-                      disabled={sections.weeks.length >= MAX_WEEKS}
-                    >
-                      +
-                    </button>
+            <div className="weekList">
+              {sections.weeks.map((goals, i) => (
+                <div className="weekItem" key={i}>
+                  <div className="rowSpace">
+                    <label className="muted small">Week {i + 1}</label>
+                    {sections.weeks.length > MIN_WEEKS ? (
+                      <span className="linkish danger small" onClick={() => removeWeekAt(i)}>
+                        remove
+                      </span>
+                    ) : null}
                   </div>
+                  <textarea
+                    className="sectionArea weekArea"
+                    placeholder={`Goals for week ${i + 1}`}
+                    value={goals}
+                    onChange={(e) => updateWeek(i, e.target.value)}
+                  />
                 </div>
+              ))}
+            </div>
+          </div>
 
-                <div className="weekList">
-                  {sections.weeks.map((goals, i) => (
-                    <div className="weekItem" key={i}>
-                      <div className="rowSpace">
-                        <label className="muted small">Week {i + 1}</label>
-                        {sections.weeks.length > MIN_WEEKS ? (
-                          <span
-                            className="linkish danger small"
-                            onClick={() => removeWeekAt(i)}
-                          >
-                            remove
-                          </span>
-                        ) : null}
-                      </div>
-                      <textarea
-                        className="sectionArea weekArea"
-                        placeholder={`Goals for week ${i + 1}`}
-                        value={goals}
-                        onChange={(e) => updateWeek(i, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+          <div className="sectionBlock">
+            <label className="muted small">Any additional info</label>
+            <textarea
+              className="sectionArea"
+              placeholder="Anything else worth keeping — links, credentials notes, quirks, decisions, etc."
+              value={sections.additionalInfo}
+              onChange={(e) => updateSection("additionalInfo", e.target.value)}
+            />
+          </div>
 
           <label className="muted small">Tags</label>
           <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
@@ -539,12 +525,57 @@ export default function ProjectForm({
             ) : null}
           </div>
 
-          {errorMsg ? <p className="errorMsg">{errorMsg}</p> : null}
+      {errorMsg ? <p className="errorMsg">{errorMsg}</p> : null}
 
-          <button className="button" type="submit" disabled={saving}>
-            {saving ? "Saving…" : project ? "Save changes" : "Create project"}
+      <button className="button" type="submit" disabled={saving}>
+        {saving ? "Saving…" : project ? "Save changes" : "Create project"}
+      </button>
+    </form>
+  );
+}
+
+// Centered-modal wrapper around ProjectFormBody — this is the "+ New
+// project" / "edit" dialog. Multi-project file uploads are handed up to
+// whoever renders this (Board) via onMultipleProjectsDetected, which
+// closes this dialog and opens the drafts dock instead.
+export default function ProjectForm({
+  project,
+  allTags,
+  userId,
+  onClose,
+  onSaved,
+  onMultipleProjectsDetected,
+  dockActive,
+}: {
+  project: Project | null;
+  allTags: string[];
+  userId: string;
+  onClose: () => void;
+  onSaved: () => void;
+  onMultipleProjectsDetected?: (drafts: ParsedProjectDraft[], sourceFileName: string) => void;
+  // True whenever the DraftDock is currently showing (drafts.length > 0),
+  // so this modal can reserve space above it instead of rendering behind
+  // it — see the .modal.aboveDock rule in globals.css.
+  dockActive?: boolean;
+}) {
+  return (
+    <div className={`modal ${dockActive ? "aboveDock" : ""}`} onClick={onClose}>
+      <div className="modalCard formModalCard" onClick={(e) => e.stopPropagation()}>
+        <div className="rowSpace">
+          <h3>{project ? "Edit project" : "New project"}</h3>
+          <button className="button ghost" type="button" onClick={onClose}>
+            Close
           </button>
-        </form>
+        </div>
+
+        <ProjectFormBody
+          project={project}
+          allTags={allTags}
+          userId={userId}
+          onCancel={onClose}
+          onSaved={onSaved}
+          onMultipleProjectsDetected={onMultipleProjectsDetected}
+        />
       </div>
     </div>
   );

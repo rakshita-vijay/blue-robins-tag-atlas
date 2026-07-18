@@ -362,11 +362,36 @@ textarea {
 .modalCard {
   width: min(640px, 100%);
   padding: 18px;
+  overflow-x: hidden;
 }
 
 .formModalCard {
   max-height: calc(100vh - 36px);
   overflow-y: auto;
+}
+
+/* Same precedent as .draftExpandedRow below: when the draft dock is on
+   screen, reserve its height (header + 3-row cap, ~190px) so the regular
+   "+ New project" modal centers in the space above it instead of
+   overlapping the minimized bars. Board passes dockActive whenever
+   drafts.length > 0. */
+.modal.aboveDock {
+  bottom: 190px;
+}
+
+.modal.aboveDock .formModalCard {
+  max-height: calc(100vh - 190px - 36px);
+}
+
+.form {
+  /* Force the single implicit column to stay at 100% of the modal no
+     matter what's nested inside a row (e.g. TagInput's horizontally-
+     scrolling PagedBubbleGrid). Without this, a grid's auto-sized column
+     grows to fit the *widest* row's content, so the whole modal — and
+     every textarea riding along in that same column — gets pulled wider
+     than the screen. Same root cause as the tagBar/tagGrid width issue;
+     minmax(0, 1fr) is the fix for grid instead of "don't use flex/grid". */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* --- structured project sections (form) --- */
@@ -447,6 +472,205 @@ textarea {
   width: fit-content;
 }
 
+/* --- multi-project drafts dock (bottom-right, minimized compose style) --- */
+
+/* Dims and blocks clicks on the rest of the app while one or more drafts
+   are expanded — same visual language as .modal's backdrop, so an open
+   draft reads as clearly "in front of" everything else instead of
+   blending into the board behind it. Sits below the dock's z-index so the
+   minimized bars (and the header/"Delete all") stay reachable above it. */
+.draftBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 18;
+}
+
+/* The up-to-3 expanded drafts, centered and laid out side by side above
+   the backdrop. Reserves space at the bottom equal to the dock's header
+   plus its 3-row cap (see .draftDockRow below) so an expanded card can
+   never overlap the minimized bars underneath it, no matter how many
+   drafts are minimized — previously this centered across the *entire*
+   viewport, which collided with the dock once it grew past one row. */
+.draftExpandedRow {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 20px;
+  bottom: 190px;
+  z-index: 19;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 0 24px;
+  pointer-events: none;
+}
+
+.draftExpandedRow .draftWindow {
+  pointer-events: auto;
+}
+
+.draftDock {
+  position: fixed;
+  right: 20px;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100vw - 40px);
+}
+
+.draftDockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  padding: 6px 12px;
+}
+
+.draftDeleteAll {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.draftLimitNotice {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 12px;
+  color: #ffd166;
+}
+
+.draftDockRow {
+  display: flex;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  /* Caps the visible dock to ~3 rows of minimized bars. Beyond that,
+     extra drafts scroll within this fixed height rather than growing the
+     dock — which is what keeps its total height predictable, so
+     .draftExpandedRow above can reserve exactly enough space and never
+     overlap it (see the "not aligned at the bottom" bug this fixes). */
+  max-height: 140px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.draftWindow {
+  width: 260px;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.draftWindow.expanded {
+  width: min(380px, calc(100vw - 40px));
+  max-height: min(600px, calc(100vh - 210px));
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+}
+
+.draftWindowHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-radius: 12px 12px 0 0;
+}
+
+.draftWindow.minimized .draftWindowHeader:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.draftWindowTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.draftWindowActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.draftWindowIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.draftWindowIconBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.draftWindowIconBtn.danger:hover {
+  color: #ff9ac8;
+}
+
+.draftWindowBody {
+  padding: 0 12px 12px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 700px) {
+  .draftDock {
+    right: 0;
+    left: 0;
+    align-items: stretch;
+    padding: 0 10px;
+  }
+
+  .draftDockRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .draftWindow,
+  .draftWindow.expanded {
+    width: 100%;
+  }
+
+  .draftExpandedRow {
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .draftExpandedRow .draftWindow.expanded {
+    max-height: none;
+    flex: 0 0 auto;
+  }
+}
+
 @media (max-width: 850px) {
   .shell {
     grid-template-columns: 1fr;
@@ -477,6 +701,14 @@ textarea {
 /* --- tag input (chip editor) --- */
 .tagInput {
   display: grid;
+  /* Same fix as .form below: without an explicit column track, this
+     grid's implicit column sizes to the widest child's content (the
+     PagedBubbleGrid's un-scrolled row width) instead of the available
+     width, so the horizontal tag scroller never actually overflows —
+     it just gets clipped by .modalCard's overflow-x: hidden instead of
+     being scrollable. minmax(0, 1fr) keeps the column pinned to the
+     container width so the scroll area inside it can do its job. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -491,6 +723,9 @@ textarea {
 
 .suggestions {
   display: grid;
+  /* Same grid-blowout fix as .tagInput/.form — pin the column instead
+     of letting it size to the tag scroller's full content width. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 

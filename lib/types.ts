@@ -7,6 +7,7 @@ export type ProjectSections = {
   futureScope: string;
   stability: string;
   weeks: string[];
+  additionalInfo: string;
 };
 
 export type Project = {

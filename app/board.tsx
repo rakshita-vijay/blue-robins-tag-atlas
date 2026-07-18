@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { rankProjects, scoreProject } from "@/lib/ranking";
 import type { Project } from "@/lib/types";
+import type { ParsedProjectDraft } from "@/lib/sections";
 import ProjectCard from "@/components/ProjectCard";
 import ProjectForm from "@/components/ProjectForm";
+import DraftDock, { type Draft } from "@/components/DraftDock";
 import TagGrid from "@/components/TagGrid";
 
 export default function Board({
@@ -25,6 +27,7 @@ export default function Board({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
   const [downloadInfo, setDownloadInfo] = useState<{ id: number; url: string | null } | null>(
     null
   );
@@ -58,15 +61,16 @@ export default function Board({
 
   // The detail pane is blank until either (a) someone clicks a project
   // card directly, or (b) selected tags "unearth" a top match. A manual
-  // click always wins over tag-matching, and only the tag-matched case
-  // shows a similarity score.
+  // click always wins over tag-matching. The similarity score shows
+  // whenever tags are selected, whether the project shown got there by
+  // manual click or by tag-matching.
   const manualProject = activeId
     ? projects.find((p) => p.id === activeId) ?? null
     : null;
   const autoProject =
     !manualProject && selectedTags.length > 0 ? ranked[0] ?? null : null;
   const displayedProject = manualProject ?? autoProject;
-  const showScoreInDetail = !manualProject && !!autoProject;
+  const showScoreInDetail = selectedTags.length > 0;
   const detailScore = displayedProject
     ? scoreProject(displayedProject, selectedTags)
     : null;
@@ -151,6 +155,31 @@ export default function Board({
   async function handleSaved() {
     setFormOpen(false);
     setEditingProject(null);
+    await refresh();
+  }
+
+  function handleMultipleProjectsDetected(
+    parsed: ParsedProjectDraft[],
+    sourceFileName: string
+  ) {
+    const newDrafts: Draft[] = parsed.map((draft, i) => ({
+      ...draft,
+      id: `draft-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      sourceFileName,
+    }));
+    setDrafts((prev) => [...prev, ...newDrafts]);
+  }
+
+  function discardDraft(draftId: string) {
+    setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+  }
+
+  function discardAllDrafts() {
+    setDrafts([]);
+  }
+
+  async function handleDraftSaved(draftId: string) {
+    discardDraft(draftId);
     await refresh();
   }
 
@@ -326,6 +355,12 @@ export default function Board({
                       </div>
                     </div>
                   ) : null}
+                  {displayedProject.sections.additionalInfo.trim() ? (
+                    <div className="sectionBlockView">
+                      <h4>Any additional info</h4>
+                      <pre className="content">{displayedProject.sections.additionalInfo}</pre>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <pre className="content">{displayedProject.content}</pre>
@@ -356,8 +391,19 @@ export default function Board({
           userId={userId}
           onClose={() => setFormOpen(false)}
           onSaved={handleSaved}
+          onMultipleProjectsDetected={handleMultipleProjectsDetected}
+          dockActive={drafts.length > 0}
         />
       ) : null}
+
+      <DraftDock
+        drafts={drafts}
+        allTags={allTags}
+        userId={userId}
+        onSaved={handleDraftSaved}
+        onDiscard={discardDraft}
+        onDiscardAll={discardAllDrafts}
+      />
     </div>
   );
 }
