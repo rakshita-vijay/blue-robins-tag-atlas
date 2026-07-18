@@ -3,14 +3,11 @@
 // matching the real `sections` JSONB structure used by ProjectForm.tsx.
 //
 // SETUP:
-// 1. Make sure the `sections` column exists:
-//      alter table projects add column if not exists sections jsonb;
-//    (run once in Supabase SQL Editor if you haven't already added it)
-// 2. npm install @supabase/supabase-js   (inside your tag-atlas project folder)
-// 3. Get your service_role key: Supabase dashboard -> Project Settings -> API -> service_role (secret)
-// 4. USER_ID below is already filled in from your earlier run.
-// 5. Run:
-//      SUPABASE_URL=https://pxyjkxmmidtnmmvzxkvy.supabase.co SUPABASE_SERVICE_ROLE_KEY=your_real_service_role_key node bulk-add-projects.mjs
+// 1. npm install @supabase/supabase-js   (inside your tag-atlas project folder)
+// 2. Get your service_role key: Supabase dashboard -> Project Settings -> API -> service_role (secret)
+// 3. Set USER_ID below to your own user id (see get-user-id.mjs).
+// 4. Run:
+//      SUPABASE_URL=https://your-project.supabase.co SUPABASE_SERVICE_ROLE_KEY=your_real_service_role_key node bulk-add-projects.mjs
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -379,7 +376,12 @@ const projects = [
 console.log(`Inserting ${projects.length} projects for user ${USER_ID}...\n`);
 
 for (const project of projects) {
-  const content = composeContent(project.sections);
+  // Fill in any keys not written out above (this file predates
+  // `additionalInfo` being added to the sections shape) so every inserted
+  // row always has the full, current shape — same as emptySections() in
+  // lib/sections.ts.
+  const sections = { intro: '', whatItIs: '', deliverables: '', futureScope: '', stability: '', additionalInfo: '', weeks: [''], ...project.sections };
+  const content = composeContent(sections);
 
   const { error } = await supabase
     .from('projects')
@@ -387,7 +389,7 @@ for (const project of projects) {
       user_id: USER_ID,
       title: project.title,
       content,
-      sections: project.sections,
+      sections,
       tags: project.tags,
     })
     .select();

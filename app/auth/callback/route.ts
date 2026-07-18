@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Supabase redirects here after someone clicks their magic-link email.
+// Supabase redirects here after someone clicks the confirmation link in
+// their sign-up email (the app uses email+password auth via
+// signUp/signInWithPassword in app/login/page.tsx, not magic links).
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");

@@ -460,6 +460,12 @@ export function ProjectFormBody({
 
             {aiError ? <p className="errorMsg small">{aiError}</p> : null}
 
+            {suggestions && !hasAnySuggestions ? (
+              <p className="muted small">
+                ✓ AI checked — your tags already cover this project well, nothing new to suggest.
+              </p>
+            ) : null}
+
             {hasAnySuggestions ? (
               <div className="aiSuggestions">
                 <span className="muted small">AI suggested — click to add, × to dismiss:</span>

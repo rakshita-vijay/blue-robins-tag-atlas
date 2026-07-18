@@ -4,12 +4,56 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { rankProjects, scoreProject } from "@/lib/ranking";
+import { composeContent, emptySections } from "@/lib/sections";
 import type { Project } from "@/lib/types";
 import type { ParsedProjectDraft } from "@/lib/sections";
 import ProjectCard from "@/components/ProjectCard";
 import ProjectForm from "@/components/ProjectForm";
 import DraftDock, { type Draft } from "@/components/DraftDock";
 import TagGrid from "@/components/TagGrid";
+import TagCleanup from "@/components/TagCleanup";
+
+// Fills in any keys missing from a project's `sections` object with empty
+// strings. Needed because rows can exist whose `sections` predates a field
+// that was added later (e.g. `bulk-add-projects.mjs` inserted projects
+// before `additionalInfo` existed) — every render below assumes every key
+// is at least an empty string, never undefined, so this runs once here
+// instead of every read needing its own defensive check.
+function normalizeProject(project: Project): Project {
+  if (!project.sections) return project;
+  const defaults = emptySections();
+  return {
+    ...project,
+    sections: {
+      ...defaults,
+      ...project.sections,
+      weeks:
+        project.sections.weeks && project.sections.weeks.length > 0
+          ? project.sections.weeks
+          : defaults.weeks,
+    },
+  };
+}
+
+// Regenerates a project's full write-up as a markdown file and triggers a
+// download, entirely client-side (no storage round-trip). Works for every
+// project — hand-typed ones included — unlike the "Original file" download
+// link below, which only exists for projects that started as a file
+// upload and only ever reflects that original file's exact text.
+function downloadProjectAsMarkdown(project: Project) {
+  const body = project.sections ? composeContent(project.sections) : project.content;
+  const markdown = `# ${project.title}\n\n${body}\n`;
+  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const safeName = project.title.trim().replace(/[^a-zA-Z0-9._ -]/g, "") || "project";
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeName}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 export default function Board({
   initialProjects,
@@ -21,13 +65,17 @@ export default function Board({
   userId: string;
 }) {
   const router = useRouter();
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [projects, setProjects] = useState<Project[]>(() =>
+    initialProjects.map(normalizeProject)
+  );
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const [downloadInfo, setDownloadInfo] = useState<{ id: number; url: string | null } | null>(
     null
   );
@@ -47,17 +95,21 @@ export default function Board({
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   }, [activeProjects]);
 
-  // Sidebar list: active projects, filtered/sorted by the selected tags.
-  const ranked = useMemo(
-    () => rankProjects(activeProjects, selectedTags),
-    [activeProjects, selectedTags]
-  );
+  // Sidebar list: active projects, filtered/sorted by the selected tags,
+  // then narrowed further by the name search box if anything's typed there.
+  const ranked = useMemo(() => {
+    const base = rankProjects(activeProjects, selectedTags);
+    const q = projectSearch.trim().toLowerCase();
+    return q ? base.filter((p) => p.title.toLowerCase().includes(q)) : base;
+  }, [activeProjects, selectedTags, projectSearch]);
 
-  // Archive drawer: just newest-first, tags don't filter it.
-  const rankedArchived = useMemo(
-    () => rankProjects(archivedProjects, []),
-    [archivedProjects]
-  );
+  // Archive drawer: just newest-first, tags don't filter it — but the name
+  // search box does, same as the main list.
+  const rankedArchived = useMemo(() => {
+    const base = rankProjects(archivedProjects, []);
+    const q = projectSearch.trim().toLowerCase();
+    return q ? base.filter((p) => p.title.toLowerCase().includes(q)) : base;
+  }, [archivedProjects, projectSearch]);
 
   // The detail pane is blank until either (a) someone clicks a project
   // card directly, or (b) selected tags "unearth" a top match. A manual
@@ -104,7 +156,25 @@ export default function Board({
       .from("projects")
       .select("*")
       .order("created_at", { ascending: false });
-    setProjects((data as Project[]) ?? []);
+    setProjects(((data as Project[]) ?? []).map(normalizeProject));
+  }
+
+  // Renames every occurrence of the tags in `tagsToMerge` to `canonical`
+  // across every project that has any of them (active or archived), then
+  // dedupes each project's tag list. Used by the "Clean up tags" modal —
+  // nothing here runs until the user confirms a specific merge.
+  async function mergeTags(tagsToMerge: string[], canonical: string) {
+    const supabase = createClient();
+    const affected = projects.filter((p) =>
+      p.tags.some((t) => tagsToMerge.includes(t))
+    );
+    for (const p of affected) {
+      const newTags = Array.from(
+        new Set(p.tags.map((t) => (tagsToMerge.includes(t) ? canonical : t)))
+      );
+      await supabase.from("projects").update({ tags: newTags }).eq("id", p.id);
+    }
+    await refresh();
   }
 
   function toggleTag(tag: string) {
@@ -184,6 +254,9 @@ export default function Board({
   }
 
   async function signOut() {
+    const ok = window.confirm("Sign out?");
+    if (!ok) return;
+
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
@@ -208,16 +281,34 @@ export default function Board({
           <button className="button" type="button" onClick={openNew}>
             + New project
           </button>
-          <button className="button ghost" type="button" onClick={signOut}>
-            Sign out
-          </button>
         </div>
+
+        {allTags.length > 1 ? (
+          <button
+            className="button ghost"
+            type="button"
+            style={{ marginTop: 8, width: "100%" }}
+            onClick={() => setCleanupOpen(true)}
+          >
+            Clean up tags
+          </button>
+        ) : null}
+
+        <input
+          type="text"
+          className="projectSearchInput"
+          placeholder="Find a project by name…"
+          value={projectSearch}
+          onChange={(e) => setProjectSearch(e.target.value)}
+        />
 
         <div className="sidebarList">
           {ranked.length === 0 ? (
             <p className="muted small">
               {activeProjects.length === 0
                 ? "No active projects — add one, or check your archive below."
+                : projectSearch.trim()
+                ? `No projects match "${projectSearch.trim()}".`
                 : "No projects match the selected tags."}
             </p>
           ) : null}
@@ -249,7 +340,11 @@ export default function Board({
           {archiveOpen ? (
             <div className="archiveList">
               {rankedArchived.length === 0 ? (
-                <p className="muted small">No archived projects.</p>
+                <p className="muted small">
+                  {archivedProjects.length === 0
+                    ? "No archived projects."
+                    : `No archived projects match "${projectSearch.trim()}".`}
+                </p>
               ) : (
                 rankedArchived.map((project) => (
                   <ProjectCard
@@ -267,6 +362,15 @@ export default function Board({
             </div>
           ) : null}
         </div>
+
+        <button
+          className="button ghost"
+          type="button"
+          style={{ marginTop: 12, width: "100%" }}
+          onClick={signOut}
+        >
+          Sign out
+        </button>
       </aside>
 
       <main className="main">
@@ -284,9 +388,18 @@ export default function Board({
             <>
               <div className="rowSpace">
                 <h3>{displayedProject.title}</h3>
-                <span className="muted small">
-                  {new Date(displayedProject.created_at).toLocaleString()}
-                </span>
+                <div className="detailHeaderActions">
+                  <span className="muted small">
+                    {new Date(displayedProject.created_at).toLocaleString()}
+                  </span>
+                  <button
+                    type="button"
+                    className="button ghost small"
+                    onClick={() => downloadProjectAsMarkdown(displayedProject)}
+                  >
+                    Download .md
+                  </button>
+                </div>
               </div>
 
               {showScoreInDetail && detailScore ? (
@@ -393,6 +506,14 @@ export default function Board({
           onSaved={handleSaved}
           onMultipleProjectsDetected={handleMultipleProjectsDetected}
           dockActive={drafts.length > 0}
+        />
+      ) : null}
+
+      {cleanupOpen ? (
+        <TagCleanup
+          allTags={allTags}
+          onMerge={mergeTags}
+          onClose={() => setCleanupOpen(false)}
         />
       ) : null}
 

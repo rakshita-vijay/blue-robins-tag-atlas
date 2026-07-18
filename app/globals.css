@@ -55,8 +55,11 @@ button {
   padding: 18px;
   position: sticky;
   top: 18px;
-  height: fit-content;
-  max-height: calc(100vh - 36px);
+  /* A definite height (not fit-content) is what lets .sidebarList's
+     flex:1 below actually claim "whatever space is left" — that's what
+     pins Archive + Sign out to the bottom regardless of list length,
+     instead of them drifting down the page as the list grows. */
+  height: calc(100vh - 36px);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -66,14 +69,19 @@ button {
   margin-top: 6px;
 }
 
+.projectSearchInput {
+  margin-top: 10px;
+}
+
 .sidebarList {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 10px;
   overflow-y: auto;
   padding-right: 4px;
   min-height: 0;
+  flex: 1 1 auto;
 }
 
 .sidebarCard {
@@ -247,7 +255,7 @@ textarea {
   width: 100%;
 }
 
-.tagRow > span {
+.tagRow>span {
   display: contents;
 }
 
@@ -331,6 +339,13 @@ textarea {
   color: #f8f1ff;
 }
 
+.detailHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
 .detail {
   margin-top: 18px;
   padding: 16px;
@@ -392,6 +407,84 @@ textarea {
      than the screen. Same root cause as the tagBar/tagGrid width issue;
      minmax(0, 1fr) is the fix for grid instead of "don't use flex/grid". */
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* --- AI tag suggestions (ProjectForm) + AI tag cleanup (TagCleanup) --- */
+
+/* Spacing around the whole "Suggest tags with AI" block in the form. */
+.aiTagBlock {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.aiSuggestions {
+  display: grid;
+  gap: 10px;
+}
+
+/* .aiSuggestionChip is applied to a <span> (ProjectForm's AI suggestions,
+   which nest a <button> + a dismiss "×") and to a <label> (TagCleanup's
+   radio choice, which nests an <input type="radio"> + text). Both need to
+   lay out their nested control and label text on one line, vertically
+   centered — .bubble/.bubble.small already provide the pill shape/padding,
+   this just fixes what's *inside* it. */
+.aiSuggestionChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Reset the nested <button>'s browser-default appearance (white
+   background, black text, its own border/padding) so it reads as plain
+   text sitting inside the parent pill instead of an opaque box stamped on
+   top of it. */
+.aiSuggestionChip button {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* A suggested tag that doesn't exist on the board yet — same pill, a
+   dashed border to visually flag "this would be new" at a glance. */
+.aiSuggestionChip.aiNew {
+  border-style: dashed;
+}
+
+.aiDismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.aiDismiss:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.aiSynonymNotes {
+  display: grid;
+  gap: 8px;
+}
+
+.aiSynonymNote {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 /* --- structured project sections (form) --- */
@@ -679,6 +772,12 @@ textarea {
   .sidebar {
     position: relative;
     top: 0;
+    height: auto;
+    max-height: none;
+  }
+
+  .sidebarList {
+    flex: 0 1 auto;
   }
 }
 
