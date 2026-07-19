@@ -114,6 +114,36 @@ button {
   white-space: nowrap;
 }
 
+/* Sits beside .sidebarCardMain as a sibling (not nested inside it) so the
+   star is its own real <button> — a button inside a button is invalid
+   HTML and unreliable for click handling. */
+.sidebarCardTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.sidebarCardTop .sidebarCardMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bookmarkToggle {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  margin-top: 0;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.bookmarkToggle.active {
+  color: #f5c451;
+}
+
 .tagScroll {
   display: flex;
   gap: 6px;
@@ -239,6 +269,10 @@ textarea {
 .tagBar {
   margin-bottom: 8px;
   width: 100%;
+}
+
+.tagBarHeader {
+  margin-bottom: 8px;
 }
 
 .tagGridOuter {
@@ -852,14 +886,39 @@ textarea {
   text-align: center;
 }
 
-/* --- archive section (footer of the sidebar) --- */
+/* --- bookmarks + archive sections (footer of the sidebar) ---
+   Each gets its own bordered/background panel (like a card) so it reads
+   as a clearly separate section instead of a plain divider line that
+   blends into the project list above it. The heading text and a thin
+   left-edge bar borrow the same accent/accent2 gradient as the "+ New
+   project" button — enough to visually tie them together — but as a
+   thin accent rather than a full solid fill, so they don't compete with
+   that button (the one place you actually want the loud version) every
+   time you glance down the sidebar. */
+.bookmarksSection,
 .archiveSection {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  position: relative;
+  margin-top: 14px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
   flex: 0 0 auto;
+  overflow: hidden;
 }
 
+.bookmarksSection::before,
+.archiveSection::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+}
+
+.bookmarksToggle,
 .archiveToggle {
   display: flex;
   align-items: center;
@@ -867,18 +926,33 @@ textarea {
   width: 100%;
   background: none;
   border: 0;
-  padding: 4px 0;
-  color: var(--muted);
-  font-weight: 600;
+  padding: 2px 0;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   text-align: left;
 }
 
+.bookmarksToggle .toggleLabel,
+.archiveToggle .toggleLabel {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bookmarksToggle .chevron,
 .archiveToggle .chevron {
   display: inline-flex;
   width: 14px;
   justify-content: center;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--muted);
 }
 
+.bookmarksList,
 .archiveList {
   display: flex;
   flex-direction: column;

@@ -1,0 +1,32 @@
+# Tag Atlas — full dependency manifest
+#
+# This is a Node.js / Next.js project, so the file npm actually reads is
+# package.json (already updated alongside this file). There's no native
+# Python-style requirements.txt for npm projects — this file exists because
+# it was asked for: a single flat list of every package this app has ever
+# needed, past and present, in one place. To install everything, run:
+#
+#   npm install
+#
+# That reads package.json + package-lock.json and installs the exact same
+# set listed below. If you ever want to regenerate this list yourself from
+# package.json, that's the source of truth — this file is a snapshot of it.
+
+# --- Runtime dependencies (needed for the app to run in production) ---
+@google/generative-ai==0.24.1      # Gemini API client — AI tag suggestions & clustering (lib/gemini.ts)
+@supabase/ssr==^0.12.3             # Supabase auth/session handling in Next.js server components
+@supabase/supabase-js==2.110.7     # Supabase client — database, auth, storage
+jszip==^3.10.1                     # Zips the "Download all as .zip" export client-side
+next==16.2.10                      # Next.js framework
+react==19.2.4                      # React
+react-dom==19.2.4                  # React DOM renderer
+
+# --- Development dependencies (needed to build/lint/type-check, not shipped to production) ---
+@tailwindcss/postcss==^4           # Tailwind's PostCSS plugin
+@types/node==^20                   # TypeScript types for Node APIs
+@types/react==^19                  # TypeScript types for React
+@types/react-dom==^19              # TypeScript types for React DOM
+eslint==^9                         # Linter
+eslint-config-next==16.2.10        # Next.js's recommended ESLint rules
+tailwindcss==^4                    # Tailwind CSS
+typescript==^5                     # TypeScript compiler

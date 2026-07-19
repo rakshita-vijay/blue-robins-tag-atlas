@@ -18,6 +18,7 @@ export default function ProjectCard({
   onEdit,
   onArchive,
   onDelete,
+  onToggleBookmark,
 }: {
   project: RankedProject;
   showScore: boolean;
@@ -26,22 +27,38 @@ export default function ProjectCard({
   onEdit: () => void;
   onArchive: () => void;
   onDelete: () => void;
+  onToggleBookmark: () => void;
 }) {
   return (
     <div className={`sidebarCard ${selected ? "selected" : ""}`}>
-      <button type="button" className="sidebarCardMain" onClick={onSelect}>
-        <div className="rowSpace">
-          <h4>{project.title}</h4>
-          {showScore ? <span className="score small">{project.percentage}%</span> : null}
-        </div>
-        <div className="tagScroll">
-          {sortTags(project.tags).map((tag) => (
-            <span key={tag} className="chip">
-              {tag}
-            </span>
-          ))}
-        </div>
-      </button>
+      <div className="sidebarCardTop">
+        <button type="button" className="sidebarCardMain" onClick={onSelect}>
+          <div className="rowSpace">
+            <h4>{project.title}</h4>
+            {showScore ? <span className="score small">{project.percentage}%</span> : null}
+          </div>
+          <div className="tagScroll">
+            {sortTags(project.tags).map((tag) => (
+              <span key={tag} className="chip">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className={`bookmarkToggle ${project.bookmarked ? "active" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleBookmark();
+          }}
+          aria-label={project.bookmarked ? "Remove bookmark" : "Bookmark this project"}
+          title={project.bookmarked ? "Remove bookmark" : "Bookmark this project"}
+        >
+          {project.bookmarked ? "★" : "☆"}
+        </button>
+      </div>
 
       <div className="rowSpace sidebarCardActions">
         <span

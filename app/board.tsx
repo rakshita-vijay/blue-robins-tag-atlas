@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { rankProjects, scoreProject } from "@/lib/ranking";
 import { composeContent, emptySections } from "@/lib/sections";
+import { createZip, uniqueFileName } from "@/lib/zip";
 import type { Project } from "@/lib/types";
 import type { ParsedProjectDraft } from "@/lib/sections";
 import ProjectCard from "@/components/ProjectCard";
@@ -35,24 +36,52 @@ function normalizeProject(project: Project): Project {
   };
 }
 
-// Regenerates a project's full write-up as a markdown file and triggers a
-// download, entirely client-side (no storage round-trip). Works for every
+// Regenerates a project's full write-up as markdown text. Works for every
 // project — hand-typed ones included — unlike the "Original file" download
 // link below, which only exists for projects that started as a file
 // upload and only ever reflects that original file's exact text.
-function downloadProjectAsMarkdown(project: Project) {
+function projectToMarkdown(project: Project): string {
   const body = project.sections ? composeContent(project.sections) : project.content;
-  const markdown = `# ${project.title}\n\n${body}\n`;
-  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  return `# ${project.title}\n\n${body}\n`;
+}
+
+function safeFileStem(title: string): string {
+  return title.trim().replace(/[^a-zA-Z0-9._ -]/g, "") || "project";
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
-  const safeName = project.title.trim().replace(/[^a-zA-Z0-9._ -]/g, "") || "project";
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${safeName}.md`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadProjectAsMarkdown(project: Project) {
+  const markdown = projectToMarkdown(project);
+  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  triggerBlobDownload(blob, `${safeFileStem(project.title)}.md`);
+}
+
+// Bundles every project (active + archived) into one .zip of .md files,
+// entirely client-side — no server round-trip, no storage bucket involved.
+// Duplicate titles get " (2)", " (3)", etc. so nothing overwrites another
+// file inside the zip.
+async function downloadAllProjectsAsZip(projects: Project[]) {
+  if (projects.length === 0) return;
+
+  const used = new Set<string>();
+  const entries = projects.map((project) => ({
+    name: uniqueFileName(`${safeFileStem(project.title)}.md`, used),
+    content: projectToMarkdown(project),
+  }));
+
+  const blob = await createZip(entries);
+  const stamp = new Date().toISOString().slice(0, 10);
+  triggerBlobDownload(blob, `tag-atlas-projects-${stamp}.zip`);
 }
 
 export default function Board({
@@ -71,6 +100,7 @@ export default function Board({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -86,6 +116,13 @@ export default function Board({
   );
   const archivedProjects = useMemo(
     () => projects.filter((p) => p.archived),
+    [projects]
+  );
+  // Bookmarks are independent of archive status — a project can be both
+  // archived and bookmarked, so this "come back to" list stays reliable
+  // even for things you've tucked away.
+  const bookmarkedProjects = useMemo(
+    () => projects.filter((p) => p.bookmarked),
     [projects]
   );
 
@@ -110,6 +147,14 @@ export default function Board({
     const q = projectSearch.trim().toLowerCase();
     return q ? base.filter((p) => p.title.toLowerCase().includes(q)) : base;
   }, [archivedProjects, projectSearch]);
+
+  // Bookmarks drawer: same pattern as the archive drawer — newest-first,
+  // narrowed by the name search box only.
+  const rankedBookmarks = useMemo(() => {
+    const base = rankProjects(bookmarkedProjects, []);
+    const q = projectSearch.trim().toLowerCase();
+    return q ? base.filter((p) => p.title.toLowerCase().includes(q)) : base;
+  }, [bookmarkedProjects, projectSearch]);
 
   // The detail pane is blank until either (a) someone clicks a project
   // card directly, or (b) selected tags "unearth" a top match. A manual
@@ -199,6 +244,17 @@ export default function Board({
     const { error } = await supabase
       .from("projects")
       .update({ archived: !project.archived })
+      .eq("id", project.id);
+    if (!error) {
+      await refresh();
+    }
+  }
+
+  async function handleToggleBookmark(project: Project) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("projects")
+      .update({ bookmarked: !project.bookmarked })
       .eq("id", project.id);
     if (!error) {
       await refresh();
@@ -323,8 +379,48 @@ export default function Board({
               onEdit={() => openEdit(project)}
               onArchive={() => handleArchive(project)}
               onDelete={() => handleDelete(project)}
+              onToggleBookmark={() => handleToggleBookmark(project)}
             />
           ))}
+        </div>
+
+        <div className="bookmarksSection">
+          <button
+            type="button"
+            className="bookmarksToggle"
+            onClick={() => setBookmarksOpen((open) => !open)}
+          >
+            <span className="chevron">{bookmarksOpen ? "\u203A" : "\u2304"}</span>
+            <span className="toggleLabel">
+              Bookmarks{bookmarkedProjects.length > 0 ? ` (${bookmarkedProjects.length})` : ""}
+            </span>
+          </button>
+
+          {bookmarksOpen ? (
+            <div className="bookmarksList">
+              {rankedBookmarks.length === 0 ? (
+                <p className="muted small">
+                  {bookmarkedProjects.length === 0
+                    ? "No bookmarks yet — tap the star on a project to save it here."
+                    : `No bookmarks match "${projectSearch.trim()}".`}
+                </p>
+              ) : (
+                rankedBookmarks.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    showScore={false}
+                    selected={displayedProject?.id === project.id}
+                    onSelect={() => selectProject(project)}
+                    onEdit={() => openEdit(project)}
+                    onArchive={() => handleArchive(project)}
+                    onDelete={() => handleDelete(project)}
+                    onToggleBookmark={() => handleToggleBookmark(project)}
+                  />
+                ))
+              )}
+            </div>
+          ) : null}
         </div>
 
         <div className="archiveSection">
@@ -334,7 +430,9 @@ export default function Board({
             onClick={() => setArchiveOpen((open) => !open)}
           >
             <span className="chevron">{archiveOpen ? "\u203A" : "\u2304"}</span>
-            Archive{archivedProjects.length > 0 ? ` (${archivedProjects.length})` : ""}
+            <span className="toggleLabel">
+              Archive{archivedProjects.length > 0 ? ` (${archivedProjects.length})` : ""}
+            </span>
           </button>
 
           {archiveOpen ? (
@@ -356,6 +454,7 @@ export default function Board({
                     onEdit={() => openEdit(project)}
                     onArchive={() => handleArchive(project)}
                     onDelete={() => handleDelete(project)}
+                    onToggleBookmark={() => handleToggleBookmark(project)}
                   />
                 ))
               )}
@@ -367,6 +466,16 @@ export default function Board({
           className="button ghost"
           type="button"
           style={{ marginTop: 12, width: "100%" }}
+          onClick={() => downloadAllProjectsAsZip(projects)}
+          disabled={projects.length === 0}
+        >
+          Download all as .zip
+        </button>
+
+        <button
+          className="button ghost"
+          type="button"
+          style={{ marginTop: 8, width: "100%" }}
           onClick={signOut}
         >
           Sign out
@@ -378,7 +487,23 @@ export default function Board({
           {allTags.length === 0 ? (
             <p className="muted">No tags yet — add your first project to get started.</p>
           ) : (
-            <TagGrid tags={allTags} selectedTags={selectedTags} onToggle={toggleTag} />
+            <>
+              {selectedTags.length > 0 ? (
+                <div className="rowSpace tagBarHeader">
+                  <span className="muted small">
+                    {selectedTags.length} tag{selectedTags.length === 1 ? "" : "s"} selected
+                  </span>
+                  <button
+                    type="button"
+                    className="button ghost small"
+                    onClick={() => setSelectedTags([])}
+                  >
+                    Clear selected tags
+                  </button>
+                </div>
+              ) : null}
+              <TagGrid tags={allTags} selectedTags={selectedTags} onToggle={toggleTag} />
+            </>
           )}
         </div>
 

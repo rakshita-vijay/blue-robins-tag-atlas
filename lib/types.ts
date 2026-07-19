@@ -20,6 +20,7 @@ export type Project = {
   file_name: string | null;
   file_path: string | null;
   archived: boolean;
+  bookmarked: boolean;
   created_at: string;
   updated_at: string;
 };
