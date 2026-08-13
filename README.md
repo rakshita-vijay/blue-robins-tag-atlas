@@ -8,7 +8,7 @@ projects, students tracking their own portfolio, freelancers documenting
 client work, or anyone who keeps re-explaining the same project from memory
 because they never wrote it down properly the first time.
 
-Live at: `https://blue-robins-tag-atlas-git-main-rax6.vercel.app`
+Live at: `https://blue-robins-tag-atlas-kappa.vercel.app`
 
 ---
 
